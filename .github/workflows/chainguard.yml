@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sreekarsarma55/ChainGuard
-          ref: phase3/action
+          ref: 2f312f8c5eeb09691b7b12841e1d16af857610ba # the action as merged in ChainGuard PR #25 (step 3.5)
           path: .chainguard
           token: ${{ secrets.CHAINGUARD_TOKEN }}
           persist-credentials: false
