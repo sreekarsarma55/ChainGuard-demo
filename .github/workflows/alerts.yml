@@ -1,0 +1,44 @@
+name: Code-scanning alerts
+
+# Export ChainGuard's code-scanning alerts (every state) and the analyses behind them as an artifact, after each
+# ChainGuard run. The repository's own token can read them; it is how the alerts get into ChainGuard's records.
+
+on:
+  workflow_run:
+    workflows: [ChainGuard]
+    types: [completed]
+  pull_request:
+    paths: [".github/workflows/alerts.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: read
+
+jobs:
+  export:
+    name: Export the alerts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read the alerts and analyses
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$REPO/code-scanning/alerts?tool_name=ChainGuard&per_page=100" > alerts.json
+          gh api --paginate "repos/$REPO/code-scanning/analyses?tool_name=ChainGuard&per_page=100" > analyses.json
+          jq -r '.[] | "#\(.number) \(.state) \(.rule.id) \(.rule.security_severity_level) \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"' alerts.json
+          {
+            echo "## ChainGuard's code-scanning alerts"
+            echo
+            echo "| Alert | State | Rule | Severity | Location | Created | Fixed |"
+            echo "|---:|---|---|---|---|---|---|"
+            jq -r '.[] | "| #\(.number) | \(.state) | \(.rule.id) | \(.rule.security_severity_level) | `\(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)` | \(.created_at) | \(.fixed_at // "") |"' alerts.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: code-scanning-alerts
+          path: |
+            alerts.json
+            analyses.json
