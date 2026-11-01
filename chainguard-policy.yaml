@@ -1,0 +1,48 @@
+# The demo's policy: ChainGuard's default policy, with one change (unlocked_manifest, below).
+# The default is src/chainguard/policy.yaml in the ChainGuard repository.
+# ChainGuard policy (roadmap step 3.3): what makes a build PASS, WARN or FAIL. chainguard.policy reads this file.
+#
+# A run is judged on two kinds of check:
+#   integrity  whether the run can be trusted at all. The gate fails closed: a tool that failed, an SBOM with no
+#              components or no successful scan is a FAIL, never a pass by omission.
+#   rules      conditions on each correlated finding on installed software. All conditions of a rule must hold;
+#              a finding takes the most severe action of the rules it matches. A condition on a value that is not
+#              known (no EPSS score, no KEV snapshot, no depth) does not hold: the integrity checks catch the
+#              missing data instead.
+# Actions: fail, warn, or ignore (the integrity checks only). The decision is the most severe action that applies.
+#
+# Exceptions accept one finding (or a vulnerability on every component) until a date, with a reason and an approver.
+# An exception without an expiry, or expiring more than max_exception_days after the evaluation date, is refused; an
+# expired one no longer applies and is reported.
+version: 1
+integrity:
+  tool_failure: fail       # a generator or scanner step failed
+  empty_sbom: fail         # a generator exited successfully but its SBOM lists no components
+  no_scan: fail            # no SBOM pipeline's scan succeeded
+  not_prioritised: fail    # the run has no priority scores (made before step 3.2: reprocess it)
+  missing_snapshot: fail   # no EPSS or no KEV snapshot was used, so those rules could not see anything
+  fused_loss: warn         # the merged SBOM lost findings against a direct scan (D3, D7)
+  # Maven has no lockfile format, so ChainGuard reports a pom.xml as pinned, not locked. This demo pins every
+  # version in its pom.xml and has no transitive tree of its own, so the warning is turned off here.
+  unlocked_manifest: ignore
+rules:
+  - id: known-exploited
+    description: Listed in CISA KEV as exploited in the wild
+    when: {kev: true}
+    action: fail
+  - id: critical-priority
+    description: Priority band critical
+    when: {band: critical}
+    action: fail
+  - id: high-priority-fixable
+    description: Priority band high, and a fixed version exists
+    when: {band: high, fix_available: true}
+    action: warn
+max_exception_days: 90
+exceptions: []
+# An exception looks like this:
+#  - vulnerability: CVE-2021-44228
+#    component: maven/org.apache.logging.log4j/log4j-core@2.14.1   # optional; a glob; omitted: every component
+#    reason: Not reachable: JNDI lookups are disabled by log4j2.formatMsgNoLookups (ticket SEC-123)
+#    approved_by: security team
+#    expires: 2026-12-31

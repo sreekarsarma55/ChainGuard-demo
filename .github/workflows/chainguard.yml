@@ -1,0 +1,43 @@
+name: ChainGuard
+
+# Scan app/ with every SBOM generator and scanner, rank the findings, and let ChainGuard's gate decide.
+# The job fails when the gate does; report.md goes to the job summary and report.sarif to code scanning.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write # upload the SARIF log to code scanning
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: ChainGuard gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # ChainGuard is not public yet, so a read-only token (the secret CHAINGUARD_TOKEN) fetches the action.
+      # Once it is public, this step and the next become: uses: sreekarsarma55/ChainGuard@<ref>
+      - name: Fetch ChainGuard
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: sreekarsarma55/ChainGuard
+          ref: phase3/action
+          path: .chainguard
+          token: ${{ secrets.CHAINGUARD_TOKEN }}
+          persist-credentials: false
+      - name: ChainGuard
+        uses: ./.chainguard
+        with:
+          path: app
+          policy: chainguard-policy.yaml
